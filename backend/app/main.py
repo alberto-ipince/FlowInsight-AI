@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.v1.health import router as health_router
+from app.api.v1.users import router as users_router
 from app.config.settings import APP_NAME, APP_VERSION, DEBUG
 
 app = FastAPI(
@@ -10,3 +11,4 @@ app = FastAPI(
 )
 
 app.include_router(health_router)
+app.include_router(users_router)
