@@ -8,6 +8,11 @@ class UserCreate(BaseModel):
     email: EmailStr
 
 
+class UserUpdate(BaseModel):
+    name: str | None = None
+    email: EmailStr | None = None
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

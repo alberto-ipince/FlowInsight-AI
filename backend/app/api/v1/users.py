@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
-from app.schemas.user_schema import UserCreate, UserResponse
+from app.schemas.user_schema import UserCreate, UserResponse, UserUpdate
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -41,3 +41,18 @@ def create_user(
 ) -> User:
     user = User(name=payload.name, email=payload.email)
     return service.create(user)
+
+
+@router.put("/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: int,
+    payload: UserUpdate,
+    service: UserService = Depends(get_user_service),
+) -> User:
+    user = service.get_by_id(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(user, field, value)
+    return service.update(user)

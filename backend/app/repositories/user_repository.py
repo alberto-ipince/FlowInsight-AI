@@ -22,6 +22,11 @@ class UserRepository:
     def get_all(self) -> list[User]:
         return self._session.query(User).all()
 
+    def update(self, user: User) -> User:
+        self._session.commit()
+        self._session.refresh(user)
+        return user
+
     def delete(self, user: User) -> None:
         self._session.delete(user)
         self._session.commit()

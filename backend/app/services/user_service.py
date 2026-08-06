@@ -18,5 +18,8 @@ class UserService:
     def get_all(self) -> list[User]:
         return self._repository.get_all()
 
+    def update(self, user: User) -> User:
+        return self._repository.update(user)
+
     def delete(self, user: User) -> None:
         self._repository.delete(user)
