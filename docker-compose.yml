@@ -1,0 +1,56 @@
+# ============================================================
+# FlowInsight AI — Docker Compose
+# ============================================================
+# Este archivo define la orquestación de los servicios del
+# proyecto. Se irá completando en sprints posteriores.
+# ============================================================
+
+version: "3.9"
+
+services:
+  # --- PostgreSQL Database ---
+  # database:
+  #   image: postgres:16-alpine
+  #   container_name: flowinsight-db
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   ports:
+  #     - "${POSTGRES_PORT}:5432"
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #     - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  # --- FastAPI Backend ---
+  # backend:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: ../docker/Dockerfile.backend
+  #   container_name: flowinsight-backend
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   ports:
+  #     - "${BACKEND_PORT}:8000"
+  #   depends_on:
+  #     - database
+  #   volumes:
+  #     - ./backend:/app
+
+  # --- React Frontend ---
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: ../docker/Dockerfile.frontend
+  #   container_name: flowinsight-frontend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "5173:5173"
+  #   depends_on:
+  #     - backend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+
+# volumes:
+#   pgdata:

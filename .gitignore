@@ -1,0 +1,75 @@
+# ============================================================
+# FlowInsight AI — .gitignore
+# ============================================================
+
+# -------------------- Python / FastAPI ----------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+venv/
+.venv/
+
+# -------------------- Node.js / React / Vite -----------------
+node_modules/
+dist/
+build/
+.vite/
+*.local
+
+# -------------------- TypeScript ----------------------------
+*.tsbuildinfo
+
+# -------------------- Environment ---------------------------
+.env
+.env.local
+.env.*.local
+
+# -------------------- Docker --------------------------------
+# (Ignorar volúmenes y datos persistentes en desarrollo)
+docker-data/
+
+# -------------------- Database ------------------------------
+*.sqlite3
+*.db
+pgdata/
+
+# -------------------- IDE / Editor --------------------------
+# VS Code
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+.vscode/tasks.json
+
+# JetBrains
+.idea/
+*.iml
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+
+# -------------------- OS -----------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# -------------------- Logs & Temp --------------------------
+*.log
+logs/
+*.tmp
+*.temp
+.cache/
+coverage/
+htmlcov/
+.pytest_cache/
+
+# -------------------- Archivos de documentación temporal ---
+*.bak
+*.orig
