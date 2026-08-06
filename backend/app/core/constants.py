@@ -1,0 +1,1 @@
+# Constantes globales del proyecto FlowInsight AI
