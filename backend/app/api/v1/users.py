@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -61,3 +61,15 @@ def update_user(
     for field, value in update_data.items():
         setattr(user, field, value)
     return service.update(user)
+
+
+@router.delete("/{user_id}", status_code=204)
+def delete_user(
+    user_id: int,
+    service: UserService = Depends(get_user_service),
+) -> Response:
+    user = service.get_by_id(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    service.delete(user)
+    return Response(status_code=204)
