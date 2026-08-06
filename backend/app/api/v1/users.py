@@ -1,3 +1,5 @@
+from collections.abc import Generator
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -10,7 +12,7 @@ from app.services.user_service import UserService
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-def get_session() -> Session:
+def get_session() -> Generator[Session, None, None]:
     session = SessionLocal()
     try:
         yield session
@@ -31,8 +33,11 @@ def list_users(service: UserService = Depends(get_user_service)) -> list[User]:
 @router.get("/{user_id}", response_model=UserResponse)
 def get_user(
     user_id: int, service: UserService = Depends(get_user_service)
-) -> User | None:
-    return service.get_by_id(user_id)
+) -> User:
+    user = service.get_by_id(user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
 
 
 @router.post("/", response_model=UserResponse, status_code=201)
