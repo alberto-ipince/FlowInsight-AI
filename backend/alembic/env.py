@@ -6,7 +6,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 from app.database.base import Base
-from app.models import user  # noqa: F401 — register models for autogenerate
+from app.models import dataset, project, user  # noqa: F401 — register models for autogenerate
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
