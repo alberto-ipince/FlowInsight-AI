@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { getAIAnalysis } from '@/services/aiService'
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Line,
   LineChart,
+  Pie,
+  PieChart,
   ResponsiveContainer,
+  Scatter,
+  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
@@ -53,8 +59,21 @@ interface DataResponse {
   total_pages: number
 }
 
+interface DashboardChart {
+  type: string
+  title: string
+  x?: string
+  y?: string
+  column?: string
+  aggregation?: string
+}
+
+type DashboardMode = 'auto' | 'ai'
+
 const METRICS = ['mean', 'median', 'sum', 'min', 'max'] as const
 type MetricType = (typeof METRICS)[number]
+
+const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316']
 
 function formatBytes(bytes: number): string {
   if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`
@@ -94,6 +113,18 @@ function AnalyticsPage() {
   const [sortCol, setSortCol] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState('asc')
   const [searchText, setSearchText] = useState('')
+
+  // AI Analysis
+  const [aiAnalysis, setAiAnalysis] = useState<{
+    insights: string[]
+    warnings: string[]
+    dashboard_layout?: DashboardChart[]
+  } | null>(null)
+  const [loadingAI, setLoadingAI] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  // Dashboard mode
+  const [dashboardMode, setDashboardMode] = useState<DashboardMode>('auto')
 
   // Histogram
   const [histData, setHistData] = useState<{ column: string; bins: string[]; counts: number[] } | null>(null)
@@ -152,6 +183,21 @@ function AnalyticsPage() {
       .catch(() => setTableData(null))
   }, [selectedDatasetId, tablePage, sortCol, sortDir, searchText])
 
+  // Fetch AI analysis
+  useEffect(() => {
+    if (selectedDatasetId === null) {
+      setAiAnalysis(null)
+      setAiError(null)
+      return
+    }
+    setLoadingAI(true)
+    setAiError(null)
+    getAIAnalysis(selectedDatasetId)
+      .then((data) => setAiAnalysis(data as { insights: string[]; warnings: string[]; dashboard_layout?: DashboardChart[] }))
+      .catch(() => setAiError('No fue posible generar el análisis inteligente.'))
+      .finally(() => setLoadingAI(false))
+  }, [selectedDatasetId])
+
   // Fetch histogram
   useEffect(() => {
     if (selectedDatasetId === null || !analytics?.numeric_statistics?.length) return
@@ -191,6 +237,136 @@ function AnalyticsPage() {
     setTablePage(1)
   }
 
+  // Validate AI chart columns exist in the dataset
+  const validCharts = (aiAnalysis?.dashboard_layout ?? []).filter((chart) => {
+    const cols = profile?.column_names ?? []
+    const okX = !chart.x || cols.includes(chart.x)
+    const okY = !chart.y || cols.includes(chart.y)
+    const okCol = !chart.column || cols.includes(chart.column)
+    return okX && okY && okCol
+  })
+
+  const renderBarChart = (chart: DashboardChart) => {
+    if (!chart.x || !chart.y || !profile) return null
+    // Use first 20 preview rows as data
+    const data = profile.preview.slice(0, 20).map((r: Record<string, unknown>) => ({
+      label: String(r[chart.x!] ?? ''),
+      value: Number(r[chart.y!]) || 0,
+    }))
+    return (
+      <div key={chart.title} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-gray-600">{chart.title}</h3>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip />
+            <Bar dataKey="value" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  const renderLineChart = (chart: DashboardChart) => {
+    if (!chart.x || !chart.y || !profile) return null
+    const data = profile.preview.slice(0, 20).map((r: Record<string, unknown>) => ({
+      label: String(r[chart.x!] ?? ''),
+      value: Number(r[chart.y!]) || 0,
+    }))
+    return (
+      <div key={chart.title} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-gray-600">{chart.title}</h3>
+        <ResponsiveContainer width="100%" height={250}>
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+            <YAxis tick={{ fontSize: 10 }} />
+            <Tooltip />
+            <Line type="monotone" dataKey="value" stroke="#f59e0b" dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  const renderScatterChart = (chart: DashboardChart) => {
+    if (!chart.x || !chart.y || !profile) return null
+    const data = profile.preview.slice(0, 50).map((r: Record<string, unknown>) => ({
+      x: Number(r[chart.x!]) || 0,
+      y: Number(r[chart.y!]) || 0,
+    }))
+    return (
+      <div key={chart.title} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-gray-600">{chart.title}</h3>
+        <ResponsiveContainer width="100%" height={250}>
+          <ScatterChart>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="x" tick={{ fontSize: 10 }} />
+            <YAxis dataKey="y" tick={{ fontSize: 10 }} />
+            <Tooltip />
+            <Scatter data={data} fill="#8b5cf6" />
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  const renderPieChart = (chart: DashboardChart) => {
+    if (!chart.column || !profile) return null
+    const counts: Record<string, number> = {}
+    profile.preview.forEach((r: Record<string, unknown>) => {
+      const key = String(r[chart.column!] ?? 'N/A')
+      counts[key] = (counts[key] || 0) + 1
+    })
+    const data = Object.entries(counts).map(([name, value]) => ({ name, value }))
+    return (
+      <div key={chart.title} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+        <h3 className="mb-3 text-sm font-semibold text-gray-600">{chart.title}</h3>
+        <ResponsiveContainer width="100%" height={250}>
+          <PieChart>
+            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={(props: { name?: string }) => props.name ?? ''}>
+              {data.map((_entry, idx) => (
+                <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    )
+  }
+
+  const renderAIChart = (chart: DashboardChart) => {
+    switch (chart.type) {
+      case 'bar': return renderBarChart(chart)
+      case 'line': return renderLineChart(chart)
+      case 'scatter': return renderScatterChart(chart)
+      case 'pie': return renderPieChart(chart)
+      case 'histogram':
+        // Use existing histogram data if column matches
+        if (histData && chart.column === histData.column && histData.bins.length > 0) {
+          return (
+            <div key={chart.title} className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-gray-600">{chart.title}</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={histData.bins.map((b, i) => ({ bin: b, count: histData.counts[i] }))}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="bin" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )
+        }
+        return null
+      default: return null
+    }
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold text-gray-800">Analytics</h1>
@@ -215,6 +391,63 @@ function AnalyticsPage() {
           </select>
         )}
       </section>
+
+      {/* Card 2.5: AI Analysis */}
+      {(loadingAI || aiAnalysis || aiError) && (
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-gray-700">
+            🧠 Análisis Inteligente
+          </h2>
+
+          {loadingAI && (
+            <div className="space-y-3">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200" />
+              <div className="h-4 w-2/3 animate-pulse rounded bg-gray-200" />
+              <div className="h-4 w-1/2 animate-pulse rounded bg-gray-200" />
+            </div>
+          )}
+
+          {aiError && (
+            <div className="rounded-md bg-yellow-50 p-4 text-sm text-yellow-800">
+              <p className="font-medium">⚠️ Análisis no disponible</p>
+              <p className="mt-1 text-yellow-700">{aiError}</p>
+            </div>
+          )}
+
+          {aiAnalysis && (
+            <div className="space-y-4">
+              {/* Insights */}
+              {aiAnalysis.insights.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-gray-700">Insights</h3>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {aiAnalysis.insights.map((insight: string, idx: number) => (
+                      <div key={idx} className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
+                        💡 {insight}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {aiAnalysis.warnings.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold text-gray-700">Advertencias</h3>
+                  <div className="space-y-1">
+                    {aiAnalysis.warnings.map((warning: string, idx: number) => (
+                      <div key={idx} className="flex items-start gap-2 rounded-lg border border-yellow-100 bg-yellow-50 p-2 text-sm text-yellow-800">
+                        <span className="mt-0.5">⚠️</span>
+                        <span>{warning}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Card 2: KPIs */}
       {profile && quality && (
@@ -253,9 +486,7 @@ function AnalyticsPage() {
                         value={metric}
                         onChange={(e) => setNumMetrics({ ...numMetrics, [stat.column]: e.target.value as MetricType })}
                       >
-                        {METRICS.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
+                        {METRICS.map((m) => (<option key={m} value={m}>{m}</option>))}
                       </select>
                     </div>
                   )
@@ -266,122 +497,147 @@ function AnalyticsPage() {
         </section>
       )}
 
-      {/* Card 3: Charts grid */}
+      {/* Mode Switch + Charts */}
       {!loadingCharts && analytics && (
-        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-gray-700">Gráficos automáticos</h2>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-
-            {/* Histogram */}
-            {histData?.bins?.length ? (
-              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                <h3 className="mb-3 text-sm font-semibold text-gray-600">Histograma: {histData.column}</h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={histData.bins.map((b, i) => ({ bin: b, count: histData.counts[i] }))}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="bin" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#6366f1" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-400">
-                Histograma no disponible
-              </div>
-            )}
-
-            {/* Categorical bars */}
-            {catStats ? (
-              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                <h3 className="mb-3 text-sm font-semibold text-gray-600">Frecuencia: {catStats.column}</h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={catStats.values}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-400">
-                Sin columnas categóricas
-              </div>
-            )}
-
-            {/* Time series */}
-            {hasTimeSeries && profile ? (
-              <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                <h3 className="mb-3 text-sm font-semibold text-gray-600">Línea temporal: {dateTimeCols[0]}</h3>
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={profile.preview.slice(0, 20).map((r: Record<string, unknown>, i: number) => ({
-                    idx: String(r[dateTimeCols[0]] ?? i),
-                  }))}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="idx" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="count" stroke="#f59e0b" dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            ) : (
-              <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-400">
-                Sin columna temporal
-              </div>
-            )}
-
-            {/* Heatmap */}
-            <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-gray-600">Correlación</h3>
-              {hasCorr ? (
-                <div className="overflow-x-auto">
-                  <table className="text-xs">
-                    <thead>
-                      <tr>
-                        <th className="px-1 py-0.5"></th>
-                        {corrKeys.map((c) => (
-                          <th key={c} className="max-w-[80px] truncate px-1 py-0.5 font-medium text-gray-600" title={c}>
-                            {c.length > 8 ? c.slice(0, 8) + '…' : c}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {corrKeys.map((row) => (
-                        <tr key={row}>
-                          <td className="max-w-[80px] truncate px-1 py-0.5 font-medium text-gray-600" title={row}>
-                            {row.length > 8 ? row.slice(0, 8) + '…' : row}
-                          </td>
-                          {corrKeys.map((col) => {
-                            const v = corrMatrix[row]?.[col] ?? 0
-                            return (
-                              <td
-                                key={col}
-                                className="px-1 py-0.5 text-center font-mono"
-                                style={{ backgroundColor: corrColor(v), width: 40 }}
-                              >
-                                {v.toFixed(2)}
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-400">
-                  No existen suficientes columnas numéricas para calcular correlaciones.
-                </p>
-              )}
+        <>
+          {/* Mode switch */}
+          <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-semibold text-gray-700">Modo Dashboard:</span>
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  name="dashboardMode"
+                  value="auto"
+                  checked={dashboardMode === 'auto'}
+                  onChange={() => setDashboardMode('auto')}
+                  className="text-blue-600"
+                />
+                Dashboard automático
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="radio"
+                  name="dashboardMode"
+                  value="ai"
+                  checked={dashboardMode === 'ai'}
+                  onChange={() => setDashboardMode('ai')}
+                  className="text-blue-600"
+                />
+                Dashboard IA
+              </label>
             </div>
+          </section>
 
-          </div>
-        </section>
+          {/* Charts */}
+          {dashboardMode === 'auto' ? (
+            <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-gray-700">Gráficos automáticos</h2>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {histData?.bins?.length ? (
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-gray-600">Histograma: {histData.column}</h3>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={histData.bins.map((b, i) => ({ bin: b, count: histData.counts[i] }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="bin" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Bar dataKey="count" fill="#6366f1" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-400">Histograma no disponible</div>
+                )}
+
+                {catStats ? (
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-gray-600">Frecuencia: {catStats.column}</h3>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <BarChart data={catStats.values}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Bar dataKey="count" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-400">Sin columnas categóricas</div>
+                )}
+
+                {hasTimeSeries && profile ? (
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-gray-600">Línea temporal: {dateTimeCols[0]}</h3>
+                    <ResponsiveContainer width="100%" height={250}>
+                      <LineChart data={profile.preview.slice(0, 20).map((r: Record<string, unknown>, i: number) => ({
+                        idx: String(r[dateTimeCols[0]] ?? i),
+                      }))}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="idx" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="count" stroke="#f59e0b" dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-400">Sin columna temporal</div>
+                )}
+
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-gray-600">Correlación</h3>
+                  {hasCorr ? (
+                    <div className="overflow-x-auto">
+                      <table className="text-xs">
+                        <thead>
+                          <tr>
+                            <th className="px-1 py-0.5"></th>
+                            {corrKeys.map((c) => (
+                              <th key={c} className="max-w-[80px] truncate px-1 py-0.5 font-medium text-gray-600" title={c}>
+                                {c.length > 8 ? c.slice(0, 8) + '…' : c}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {corrKeys.map((row) => (
+                            <tr key={row}>
+                              <td className="max-w-[80px] truncate px-1 py-0.5 font-medium text-gray-600" title={row}>{row.length > 8 ? row.slice(0, 8) + '…' : row}</td>
+                              {corrKeys.map((col) => {
+                                const v = corrMatrix[row]?.[col] ?? 0
+                                return (
+                                  <td key={col} className="px-1 py-0.5 text-center font-mono" style={{ backgroundColor: corrColor(v), width: 40 }}>
+                                    {v.toFixed(2)}
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400">No existen suficientes columnas numéricas para calcular correlaciones.</p>
+                  )}
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-lg font-semibold text-gray-700">🤖 Dashboard generado por IA</h2>
+              {validCharts.length === 0 ? (
+                <p className="text-sm text-gray-400">La IA no ha generado gráficos o el análisis aún no está disponible.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  {validCharts.map((chart) => renderAIChart(chart))}
+                </div>
+              )}
+            </section>
+          )}
+        </>
       )}
 
       {/* Card 4: Table */}
@@ -390,9 +646,7 @@ function AnalyticsPage() {
           <h2 className="mb-3 text-lg font-semibold text-gray-700">Vista previa ({tableData.filtered_rows} filas)</h2>
           <div className="mb-3">
             <input
-              type="text"
-              placeholder="Buscar..."
-              value={searchText}
+              type="text" placeholder="Buscar..." value={searchText}
               onChange={(e) => { setSearchText(e.target.value); setTablePage(1) }}
               className="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
             />
@@ -402,11 +656,7 @@ function AnalyticsPage() {
               <thead className="bg-gray-50">
                 <tr>
                   {profile.column_names.map((col: string) => (
-                    <th
-                      key={col}
-                      className="cursor-pointer px-3 py-2 font-medium text-gray-600 hover:text-gray-900"
-                      onClick={() => handleSort(col)}
-                    >
+                    <th key={col} className="cursor-pointer px-3 py-2 font-medium text-gray-600 hover:text-gray-900" onClick={() => handleSort(col)}>
                       {col} {sortCol === col ? (sortDir === 'asc' ? '▲' : '▼') : ''}
                     </th>
                   ))}
@@ -416,9 +666,7 @@ function AnalyticsPage() {
                 {tableData.records.map((row, idx) => (
                   <tr key={idx} className="even:bg-gray-50/50">
                     {profile.column_names.map((col: string) => (
-                      <td key={col} className="whitespace-nowrap px-3 py-1.5 text-gray-700">
-                        {String(row[col] ?? '')}
-                      </td>
+                      <td key={col} className="whitespace-nowrap px-3 py-1.5 text-gray-700">{String(row[col] ?? '')}</td>
                     ))}
                   </tr>
                 ))}
@@ -428,20 +676,8 @@ function AnalyticsPage() {
           <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
             <span>Página {tableData.page} de {tableData.total_pages}</span>
             <div className="flex gap-2">
-              <button
-                disabled={tableData.page <= 1}
-                onClick={() => setTablePage((p) => p - 1)}
-                className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40"
-              >
-                Anterior
-              </button>
-              <button
-                disabled={tableData.page >= tableData.total_pages}
-                onClick={() => setTablePage((p) => p + 1)}
-                className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40"
-              >
-                Siguiente
-              </button>
+              <button disabled={tableData.page <= 1} onClick={() => setTablePage((p) => p - 1)} className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40">Anterior</button>
+              <button disabled={tableData.page >= tableData.total_pages} onClick={() => setTablePage((p) => p + 1)} className="rounded border border-gray-300 px-3 py-1 disabled:opacity-40">Siguiente</button>
             </div>
           </div>
         </section>

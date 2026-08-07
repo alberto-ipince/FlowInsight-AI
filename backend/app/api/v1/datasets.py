@@ -14,6 +14,7 @@ from app.schemas.dataset_schema import (
     DatasetUpdate,
 )
 from app.schemas.pipeline_schema import PipelinePreviewResponse, PipelineRequest, PipelineResponse
+from app.services.ai_service import AIService, build_context
 from app.services.analytics_service import AnalyticsService
 from app.services.data_service import DataService
 from app.services.dataset_reader_service import DatasetReaderService
@@ -217,6 +218,30 @@ def download_dataset(
         filename=dataset.original_filename,
         media_type="application/octet-stream",
     )
+
+
+@router.get("/{dataset_id}/ai-analysis")
+def get_ai_analysis(
+    dataset_id: int,
+    service: DatasetService = Depends(get_dataset_service),
+) -> dict:
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    reader = DatasetReaderService()
+    df = reader.read(dataset.file_path)
+    context = build_context(df)
+
+    ai = AIService()
+    analysis = ai.analyze_dataset(context)
+    dashboard = ai.recommend_dashboard(context)
+
+    return {
+        "insights": analysis.get("insights", []),
+        "warnings": analysis.get("warnings", []),
+        "dashboard_layout": dashboard.get("charts", []),
+    }
 
 
 @router.get("/{dataset_id}/histogram")
