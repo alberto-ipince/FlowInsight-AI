@@ -15,6 +15,7 @@ from app.schemas.dataset_schema import (
 )
 from app.schemas.pipeline_schema import PipelinePreviewResponse, PipelineRequest, PipelineResponse
 from app.services.analytics_service import AnalyticsService
+from app.services.data_service import DataService
 from app.services.dataset_reader_service import DatasetReaderService
 from app.services.dataset_service import DatasetService
 from app.services.etl_pipeline_service import ETLPipelineService
@@ -215,6 +216,44 @@ def download_dataset(
         path=str(file_path),
         filename=dataset.original_filename,
         media_type="application/octet-stream",
+    )
+
+
+@router.get("/{dataset_id}/histogram")
+def get_dataset_histogram(
+    dataset_id: int,
+    column: str,
+    bins: int = 10,
+    service: DatasetService = Depends(get_dataset_service),
+) -> dict:
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    analytics = AnalyticsService()
+    return analytics.histogram(dataset.file_path, column=column, bins=bins)
+
+
+@router.get("/{dataset_id}/data")
+def get_dataset_data(
+    dataset_id: int,
+    service: DatasetService = Depends(get_dataset_service),
+    page: int = 1,
+    page_size: int = 50,
+    sort_col: str | None = None,
+    sort_dir: str = "asc",
+    search: str = "",
+) -> dict:
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    data_service = DataService()
+    return data_service.get_data(
+        file_path=dataset.file_path,
+        page=page,
+        page_size=page_size,
+        sort_col=sort_col,
+        sort_dir=sort_dir,
+        search=search,
     )
 
 

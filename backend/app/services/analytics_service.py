@@ -146,3 +146,25 @@ class AnalyticsService:
             "has_duplicates": bool(df.duplicated().any()),
             "quality_score": quality["quality_score"],
         }
+
+    def histogram(self, file_path: str, column: str, bins: int = 10) -> dict:
+        reader = DatasetReaderService()
+        df = reader.read(file_path)
+
+        if column not in df.columns or not pd.api.types.is_numeric_dtype(df[column]):
+            return {"column": column, "bins": [], "counts": []}
+
+        series = df[column].dropna()
+        if len(series) == 0:
+            return {"column": column, "bins": [], "counts": []}
+
+        counts, bin_edges = pd.cut(series, bins=bins, retbins=True)
+        value_counts = counts.value_counts().sort_index()
+
+        bin_labels = [f"{bin_edges[i]:.2f}-{bin_edges[i+1]:.2f}" for i in range(len(bin_edges) - 1)]
+
+        return {
+            "column": column,
+            "bins": bin_labels,
+            "counts": [int(v) for v in value_counts.values],
+        }

@@ -581,7 +581,7 @@ function DataPreparationPage() {
 
           {cleanMode === 'analyze' ? (
             <button
-              onClick={() => navigate('/analytics')}
+              onClick={() => navigate(`/analytics?dataset_id=${dataset?.id ?? ''}`)}
               disabled={!dataset}
               className={`rounded-md px-4 py-2 text-sm font-medium ${
                 dataset
