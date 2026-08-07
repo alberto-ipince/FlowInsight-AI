@@ -13,7 +13,7 @@ from app.schemas.dataset_schema import (
     DatasetResponse,
     DatasetUpdate,
 )
-from app.schemas.pipeline_schema import PipelineRequest, PipelineResponse
+from app.schemas.pipeline_schema import PipelinePreviewResponse, PipelineRequest, PipelineResponse
 from app.services.analytics_service import AnalyticsService
 from app.services.dataset_reader_service import DatasetReaderService
 from app.services.dataset_service import DatasetService
@@ -167,6 +167,34 @@ def run_dataset_pipeline(
         resulting_rows=len(result_df),
         resulting_columns=len(result_df.columns),
         message=f"Pipeline executed successfully. {original_rows} → {len(result_df)} rows.",
+    )
+
+
+@router.post("/{dataset_id}/pipeline/preview", response_model=PipelinePreviewResponse)
+def preview_dataset_pipeline(
+    dataset_id: int,
+    payload: PipelineRequest,
+    service: DatasetService = Depends(get_dataset_service),
+) -> PipelinePreviewResponse:
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    reader = DatasetReaderService()
+    df = reader.read(dataset.file_path)
+    original_rows = len(df)
+
+    pipeline = ETLPipelineService()
+    steps_dicts = [step.model_dump() for step in payload.steps]
+    result_df = pipeline.run_pipeline(df, steps_dicts)
+
+    operations = [step.operation for step in payload.steps]
+
+    return PipelinePreviewResponse(
+        original_rows=original_rows,
+        resulting_rows=len(result_df),
+        removed_rows=original_rows - len(result_df),
+        operations=operations,
     )
 
 

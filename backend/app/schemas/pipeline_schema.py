@@ -15,3 +15,10 @@ class PipelineResponse(BaseModel):
     resulting_rows: int
     resulting_columns: int
     message: str
+
+
+class PipelinePreviewResponse(BaseModel):
+    original_rows: int
+    resulting_rows: int
+    removed_rows: int
+    operations: list[str]
