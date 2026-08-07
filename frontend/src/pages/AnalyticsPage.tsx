@@ -1,4 +1,13 @@
 import { useEffect, useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import apiClient from '@/api/apiClient'
 
 interface DatasetRecord {
@@ -25,6 +34,11 @@ interface QualityData {
   quality_score: number
 }
 
+interface AnalyticsData {
+  categorical_statistics: { column: string; values: { label: string; count: number }[] }[]
+  numeric_statistics: { column: string; min: number; mean: number; median: number; max: number }[]
+}
+
 function formatBytes(bytes: number): string {
   if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`
   if (bytes >= 1_024) return `${(bytes / 1_024).toFixed(1)} KB`
@@ -41,6 +55,9 @@ function AnalyticsPage() {
   const [loadingKpis, setLoadingKpis] = useState(false)
   const [errorKpis, setErrorKpis] = useState(false)
 
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
+  const [loadingCharts, setLoadingCharts] = useState(false)
+
   useEffect(() => {
     apiClient
       .get<DatasetRecord[]>('/datasets/')
@@ -53,26 +70,34 @@ function AnalyticsPage() {
     if (selectedDatasetId === null) {
       setProfile(null)
       setQuality(null)
+      setAnalytics(null)
       return
     }
 
     setLoadingKpis(true)
     setErrorKpis(false)
+    setLoadingCharts(true)
 
     Promise.all([
       apiClient.get<ProfileData>(`/datasets/${selectedDatasetId}/profile`),
       apiClient.get<QualityData>(`/datasets/${selectedDatasetId}/quality`),
+      apiClient.get<AnalyticsData>(`/datasets/${selectedDatasetId}/analytics`),
     ])
-      .then(([profileRes, qualityRes]) => {
+      .then(([profileRes, qualityRes, analyticsRes]) => {
         setProfile(profileRes.data)
         setQuality(qualityRes.data)
+        setAnalytics(analyticsRes.data)
       })
       .catch(() => {
         setErrorKpis(true)
         setProfile(null)
         setQuality(null)
+        setAnalytics(null)
       })
-      .finally(() => setLoadingKpis(false))
+      .finally(() => {
+        setLoadingKpis(false)
+        setLoadingCharts(false)
+      })
   }, [selectedDatasetId])
 
   const kpiRows =
@@ -81,6 +106,13 @@ function AnalyticsPage() {
       : errorKpis || !profile || !quality
         ? 'N/D'
         : null
+
+  // Prepare categorical chart data (first categorical column)
+  const catStats = analytics?.categorical_statistics?.[0]
+  const catChartData = catStats?.values ?? []
+
+  // Prepare numeric summary chart data (first numeric column)
+  const numStat = analytics?.numeric_statistics?.[0]
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -220,18 +252,67 @@ function AnalyticsPage() {
       {/* Card 5: Visualizaciones */}
       <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-3 text-lg font-semibold text-gray-700">Visualizaciones</h2>
-        <div className="grid grid-cols-2 gap-4">
-          {['Gráfico de barras', 'Gráfico de dispersión', 'Histograma', 'Gráfico de líneas'].map(
-            (chart) => (
-              <div
-                key={chart}
-                className="flex h-40 items-center justify-center rounded-lg border border-dashed border-gray-200 bg-gray-50 text-sm text-gray-400"
-              >
-                {chart} (próximamente)
-              </div>
-            ),
-          )}
-        </div>
+
+        {loadingCharts ? (
+          <p className="text-sm text-blue-600">Cargando visualizaciones...</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {/* Chart 1: Categorical Bar Chart */}
+            <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-gray-600">
+                {catStats
+                  ? `Frecuencia de: ${catStats.column}`
+                  : 'Frecuencia de columnas categóricas'}
+              </h3>
+              {catChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={catChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-gray-400">
+                  No existen columnas categóricas para visualizar.
+                </p>
+              )}
+            </div>
+
+            {/* Chart 2: Numeric Summary */}
+            <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-gray-600">
+                {numStat
+                  ? `Resumen estadístico de: ${numStat.column}`
+                  : 'Resumen estadístico de columnas numéricas'}
+              </h3>
+              {numStat ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart
+                    data={[
+                      { metric: 'Min', value: numStat.min },
+                      { metric: 'Mean', value: numStat.mean },
+                      { metric: 'Median', value: numStat.median },
+                      { metric: 'Max', value: numStat.max },
+                    ]}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="metric" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <p className="text-sm text-gray-400">
+                  No existen columnas numéricas para visualizar.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Card 6: Vista previa del Dataset */}
