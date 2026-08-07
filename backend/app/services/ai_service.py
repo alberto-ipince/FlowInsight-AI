@@ -106,6 +106,41 @@ class AIService:
         user_message = json.dumps(context, ensure_ascii=False)
         return self._call(SYSTEM_PROMPT, user_message)
 
+    def chat_dataset(self, context: dict[str, Any], messages: list[dict[str, str]]) -> str:
+        """Responde preguntas sobre el dataset usando el historial de conversación."""
+        system_prompt = (
+            "Eres un analista de datos experto. "
+            "Responde preguntas sobre el dataset usando ÚNICAMENTE la información del contexto proporcionado. "
+            "NO inventes datos. Si no tienes suficiente información, indícalo claramente. "
+            "Sé conciso y directo. "
+            "Responde en español."
+        )
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+                *messages[-6:],
+            ],
+            "temperature": 0.5,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        response = requests.post(
+            f"{self.base_url}/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=60,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
     def recommend_dashboard(self, context: dict[str, Any]) -> dict[str, Any]:
         """Genera un dashboard layout a partir del contexto del dataset."""
         user_message = json.dumps(context, ensure_ascii=False)

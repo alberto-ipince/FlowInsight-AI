@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database.session import SessionLocal
 from app.models.dataset import Dataset
 from app.repositories.dataset_repository import DatasetRepository
+from app.schemas.chat_schema import ChatRequest, ChatResponse
 from app.schemas.dataset_schema import (
     DatasetCreate,
     DatasetResponse,
@@ -18,6 +19,7 @@ from app.services.ai_service import AIService, build_context
 from app.services.analytics_service import AnalyticsService
 from app.services.data_service import DataService
 from app.services.dashboard_aggregator import prepare_all_charts
+from app.services.report_service import generate_pdf_report
 from app.services.dataset_reader_service import DatasetReaderService
 from app.services.dataset_service import DatasetService
 from app.services.etl_pipeline_service import ETLPipelineService
@@ -237,6 +239,50 @@ def get_dataset_histogram(
         raise HTTPException(status_code=404, detail="Dataset not found")
     analytics = AnalyticsService()
     return analytics.histogram(dataset.file_path, column=column, bins=bins)
+
+
+@router.post("/{dataset_id}/chat", response_model=ChatResponse)
+def chat_with_dataset(
+    dataset_id: int,
+    payload: ChatRequest,
+    service: DatasetService = Depends(get_dataset_service),
+) -> ChatResponse:
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    reader = DatasetReaderService()
+    df = reader.read(dataset.file_path)
+    context = build_context(df)
+
+    ai = AIService()
+    messages = [{"role": m.role, "content": m.content} for m in payload.messages]
+    answer = ai.chat_dataset(context, messages)
+
+    return ChatResponse(answer=answer)
+
+
+@router.get("/{dataset_id}/report")
+def download_dataset_report(
+    dataset_id: int,
+    service: DatasetService = Depends(get_dataset_service),
+):
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    try:
+        pdf_buffer = generate_pdf_report(dataset_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating report: {str(e)}")
+
+    return Response(
+        content=pdf_buffer.getvalue(),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="FlowInsight_Report_{dataset.original_filename}.pdf"'
+        },
+    )
 
 
 @router.get("/{dataset_id}/ai-dashboard-data")

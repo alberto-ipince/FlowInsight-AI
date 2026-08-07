@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useActiveDataset } from '@/contexts/ActiveDatasetContext'
 import { getAIAnalysis } from '@/services/aiService'
+import { sendChatMessage } from '@/services/chatService'
 import {
   Bar, BarChart, CartesianGrid, Cell, Line, LineChart,
   Pie, PieChart, ResponsiveContainer, Scatter, ScatterChart,
@@ -97,6 +98,12 @@ function AnalyticsPage() {
     type: string; title: string; data: Record<string, unknown>[]; error?: string
   }[] | null>(null)
 
+  // Chat
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [generatingReport, setGeneratingReport] = useState(false)
+  const [sendingChat, setSendingChat] = useState(false)
+
   const [histData, setHistData] = useState<{ column: string; bins: string[]; counts: number[] } | null>(null)
 
   // Modal
@@ -179,6 +186,57 @@ function AnalyticsPage() {
       .catch(() => { setAiError('No fue posible generar el análisis inteligente.'); log('Error IA') })
       .finally(() => setLoadingAI(false))
   }, [selectedDatasetId])
+
+  // Reset chat when dataset changes
+  useEffect(() => {
+    setChatMessages([])
+    setChatInput('')
+  }, [selectedDatasetId])
+
+  const handleGenerateReport = async () => {
+    if (!selectedDatasetId) return
+    setGeneratingReport(true)
+    try {
+      const response = await apiClient.get(`/datasets/${selectedDatasetId}/report`, {
+        responseType: 'blob',
+      })
+      const url = window.URL.createObjectURL(new Blob([response.data as BlobPart], { type: 'application/pdf' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `FlowInsight_Report_${currentDs?.original_filename ?? 'dataset'}.pdf`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      alert('No se pudo generar el reporte. Intenta de nuevo.')
+    } finally {
+      setGeneratingReport(false)
+    }
+  }
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || selectedDatasetId === null || sendingChat) return
+    const userMsg = chatInput.trim()
+    setChatInput('')
+    setChatMessages((prev) => [...prev, { role: 'user', content: userMsg }])
+    setSendingChat(true)
+    try {
+      const allMessages = [
+        ...chatMessages,
+        { role: 'user' as const, content: userMsg },
+      ]
+      const answer = await sendChatMessage(selectedDatasetId, allMessages)
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: answer }])
+    } catch {
+      setChatMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Lo siento, no pude procesar tu pregunta. Intenta de nuevo.' },
+      ])
+    } finally {
+      setSendingChat(false)
+    }
+  }
 
   // Histogram
   useEffect(() => {
@@ -411,6 +469,14 @@ function AnalyticsPage() {
               <span className="text-sm font-semibold text-gray-700">Modo Dashboard:</span>
               <label className="flex items-center gap-2 cursor-pointer text-sm"><input type="radio" name="dm" value="auto" checked={dashboardMode === 'auto'} onChange={() => setDashboardMode('auto')} className="text-blue-600" />Dashboard automático</label>
               <label className="flex items-center gap-2 cursor-pointer text-sm"><input type="radio" name="dm" value="ai" checked={dashboardMode === 'ai'} onChange={() => setDashboardMode('ai')} className="text-blue-600" />Dashboard IA</label>
+              <div className="flex-1"></div>
+              <button
+                onClick={handleGenerateReport}
+                disabled={!selectedDatasetId || generatingReport}
+                className="flex items-center gap-1 rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+              >
+                {generatingReport ? 'Generando reporte...' : '📄 Generar Reporte PDF'}
+              </button>
             </div>
           </section>
 
@@ -443,6 +509,73 @@ function AnalyticsPage() {
             </section>
           )}
         </>
+      )}
+
+      {/* Chat */}
+      {selectedDatasetId && (
+        <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold text-gray-700">
+            💬 Chat con el Dataset
+          </h2>
+          <p className="mb-4 text-sm text-gray-500">
+            Haz preguntas sobre el dataset actualmente seleccionado.
+          </p>
+
+          {/* Messages */}
+          <div className="mb-4 max-h-80 overflow-y-auto space-y-3 rounded-lg bg-gray-50 p-4">
+            {chatMessages.length === 0 ? (
+              <p className="text-center text-sm text-gray-400">
+                {selectedDatasetId !== null
+                  ? 'Escribe una pregunta para comenzar.'
+                  : 'Selecciona un dataset para iniciar el chat.'}
+              </p>
+            ) : (
+              chatMessages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[75%] rounded-lg px-4 py-2 text-sm ${
+                      msg.role === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-gray-200 text-gray-800'
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))
+            )}
+            {sendingChat && (
+              <div className="flex justify-start">
+                <div className="rounded-lg bg-white border border-gray-200 px-4 py-2 text-sm text-gray-400 italic">
+                  La IA está analizando...
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat() }}
+              placeholder="Escribe una pregunta sobre el dataset..."
+              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+              disabled={sendingChat || selectedDatasetId === null}
+            />
+            <button
+              onClick={handleSendChat}
+              disabled={!chatInput.trim() || sendingChat || selectedDatasetId === null}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500"
+            >
+              Enviar
+            </button>
+          </div>
+        </section>
       )}
 
       {/* Table */}
