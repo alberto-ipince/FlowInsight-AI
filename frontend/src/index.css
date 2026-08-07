@@ -1,1 +1,74 @@
 @import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-gray-800 antialiased;
+  }
+}
+
+/* Smooth transitions for cards and buttons */
+.card-hover {
+  @apply transition-all duration-200 ease-in-out;
+}
+
+.card-hover:hover {
+  @apply shadow-lg -translate-y-0.5;
+}
+
+/* Consistent button styles */
+.btn-primary {
+  @apply rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none;
+}
+
+.btn-secondary {
+  @apply rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-all duration-200 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400;
+}
+
+.btn-success {
+  @apply rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none;
+}
+
+.btn-purple {
+  @apply rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all duration-200 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-500 disabled:shadow-none;
+}
+
+/* Sidebar link style */
+.sidebar-link {
+  @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150;
+}
+
+.sidebar-link-active {
+  @apply bg-blue-50 text-blue-700 shadow-sm;
+}
+
+.sidebar-link-inactive {
+  @apply text-gray-600 hover:bg-gray-100 hover:text-gray-900;
+}
+
+/* Fade-in animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

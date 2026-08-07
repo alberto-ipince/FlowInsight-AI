@@ -4,25 +4,52 @@ function Sidebar() {
   const location = useLocation()
 
   const linkClass = (path: string) =>
-    `block rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-      location.pathname === path
-        ? 'bg-blue-100 text-blue-700'
-        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-    }`
+    `sidebar-link ${location.pathname === path ? 'sidebar-link-active' : 'sidebar-link-inactive'}`
 
   return (
-    <aside className="w-60 border-r border-gray-200 bg-white p-4">
-      <nav className="space-y-1">
+    <aside className="flex w-64 flex-col border-r border-gray-200 bg-white">
+      {/* Logo */}
+      <div className="border-b border-gray-100 px-5 py-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-lg font-bold text-white shadow-md">
+            F
+          </div>
+          <div>
+            <p className="text-base font-bold text-gray-800">FlowInsight AI</p>
+            <p className="text-xs text-gray-400">AI Powered Analytics</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 space-y-1 px-3 py-4">
+        <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Principal
+        </p>
         <Link to="/" className={linkClass('/')}>
-          🏠 Inicio
+          <span className="text-lg">🏠</span>
+          <span>Inicio</span>
         </Link>
+
+        <p className="mb-2 mt-5 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Datos
+        </p>
         <Link to="/preparation" className={linkClass('/preparation')}>
-          📁 Preparación de Datos
+          <span className="text-lg">📁</span>
+          <span>Preparación de Datos</span>
         </Link>
         <Link to="/analytics" className={linkClass('/analytics')}>
-          📊 Analytics
+          <span className="text-lg">📊</span>
+          <span>Analytics</span>
         </Link>
       </nav>
+
+      {/* Footer */}
+      <div className="border-t border-gray-100 px-5 py-4">
+        <p className="text-xs text-gray-400">
+          © 2026 FlowInsight AI
+        </p>
+      </div>
     </aside>
   )
 }
