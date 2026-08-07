@@ -13,6 +13,7 @@ from app.schemas.dataset_schema import (
     DatasetUpdate,
 )
 from app.schemas.pipeline_schema import PipelineRequest, PipelineResponse
+from app.services.analytics_service import AnalyticsService
 from app.services.dataset_reader_service import DatasetReaderService
 from app.services.dataset_service import DatasetService
 from app.services.etl_pipeline_service import ETLPipelineService
@@ -166,6 +167,18 @@ def run_dataset_pipeline(
         resulting_columns=len(result_df.columns),
         message=f"Pipeline executed successfully. {original_rows} → {len(result_df)} rows.",
     )
+
+
+@router.get("/{dataset_id}/analytics")
+def get_dataset_analytics(
+    dataset_id: int,
+    service: DatasetService = Depends(get_dataset_service),
+) -> dict:
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    analytics = AnalyticsService()
+    return analytics.analyze(dataset.file_path)
 
 
 @router.delete("/{dataset_id}", status_code=204)

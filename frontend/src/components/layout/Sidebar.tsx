@@ -19,6 +19,9 @@ function Sidebar() {
         <Link to="/preparation" className={linkClass('/preparation')}>
           📁 Preparación de Datos
         </Link>
+        <Link to="/analytics" className={linkClass('/analytics')}>
+          📊 Analytics
+        </Link>
       </nav>
     </aside>
   )

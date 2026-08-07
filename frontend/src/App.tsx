@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import MainLayout from '@/layouts/MainLayout'
+import AnalyticsPage from '@/pages/AnalyticsPage'
 import DataPreparationPage from '@/pages/DataPreparationPage'
 import { getHealth } from '@/services/healthService'
 
@@ -21,6 +22,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/preparation" element={<DataPreparationPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
         </Routes>
       </MainLayout>
     </BrowserRouter>
