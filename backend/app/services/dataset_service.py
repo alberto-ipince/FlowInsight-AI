@@ -15,6 +15,9 @@ class DatasetService:
     def get_all(self) -> list[Dataset]:
         return self._repository.get_all()
 
+    def get_recent(self, limit: int = 50) -> list[Dataset]:
+        return self._repository.get_recent(limit)
+
     def update(self, dataset: Dataset) -> Dataset:
         return self._repository.update(dataset)
 

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { ActiveDatasetProvider } from '@/contexts/ActiveDatasetContext'
 import MainLayout from '@/layouts/MainLayout'
 import AnalyticsPage from '@/pages/AnalyticsPage'
 import DataPreparationPage from '@/pages/DataPreparationPage'
@@ -18,13 +19,15 @@ function App() {
 
   return (
     <BrowserRouter>
-      <MainLayout>
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/preparation" element={<DataPreparationPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-        </Routes>
-      </MainLayout>
+      <ActiveDatasetProvider>
+        <MainLayout>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/preparation" element={<DataPreparationPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+          </Routes>
+        </MainLayout>
+      </ActiveDatasetProvider>
     </BrowserRouter>
   )
 }

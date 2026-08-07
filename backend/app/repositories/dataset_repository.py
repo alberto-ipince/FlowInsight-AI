@@ -27,3 +27,11 @@ class DatasetRepository:
     def delete(self, dataset: Dataset) -> None:
         self._session.delete(dataset)
         self._session.commit()
+
+    def get_recent(self, limit: int = 50) -> list[Dataset]:
+        return (
+            self._session.query(Dataset)
+            .order_by(Dataset.created_at.desc())
+            .limit(limit)
+            .all()
+        )

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useActiveDataset } from '@/contexts/ActiveDatasetContext'
 import apiClient from '@/api/apiClient'
 
 interface DatasetRecord {
@@ -40,6 +41,7 @@ function DataPreparationPage() {
   const [executingPipeline, setExecutingPipeline] = useState(false)
   const [previewResult, setPreviewResult] = useState<Record<string, unknown> | null>(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
+  const { setActiveDatasetId } = useActiveDataset()
   const navigate = useNavigate()
 
   const pipelineActive =
@@ -144,6 +146,7 @@ function DataPreparationPage() {
 
       const uploaded = response.data
       setDataset(uploaded)
+      setActiveDatasetId(uploaded.id)
       setSuccess(`Archivo "${file.name}" subido correctamente.`)
 
       setLoadingProfile(true)
