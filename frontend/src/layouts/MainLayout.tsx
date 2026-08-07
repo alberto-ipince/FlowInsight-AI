@@ -9,12 +9,14 @@ interface MainLayoutProps {
 
 function MainLayout({ children }: MainLayoutProps) {
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <Header />
-      <Sidebar />
-      <main>{children}</main>
+      <div className="flex flex-1">
+        <Sidebar />
+        <main className="flex-1 bg-gray-50">{children}</main>
+      </div>
       <Footer />
-    </>
+    </div>
   )
 }
 

@@ -12,8 +12,10 @@ from app.schemas.dataset_schema import (
     DatasetResponse,
     DatasetUpdate,
 )
+from app.schemas.pipeline_schema import PipelineRequest, PipelineResponse
 from app.services.dataset_reader_service import DatasetReaderService
 from app.services.dataset_service import DatasetService
+from app.services.etl_pipeline_service import ETLPipelineService
 from app.services.file_storage_service import FileStorageService
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
@@ -127,6 +129,43 @@ def update_dataset(
     for field, value in update_data.items():
         setattr(dataset, field, value)
     return service.update(dataset)
+
+
+@router.post("/{dataset_id}/pipeline", response_model=PipelineResponse)
+def run_dataset_pipeline(
+    dataset_id: int,
+    payload: PipelineRequest,
+    service: DatasetService = Depends(get_dataset_service),
+) -> PipelineResponse:
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    reader = DatasetReaderService()
+    df = reader.read(dataset.file_path)
+    original_rows = len(df)
+
+    pipeline = ETLPipelineService()
+    steps_dicts = [step.model_dump() for step in payload.steps]
+    result_df = pipeline.run_pipeline(df, steps_dicts)
+
+    # Export cleaned DataFrame
+    original_path = Path(dataset.file_path)
+    clean_name = f"{original_path.stem}_clean{original_path.suffix}"
+    clean_path = f"app/uploads/{clean_name}"
+    pipeline.export_dataframe(result_df, clean_path)
+
+    # Update dataset record
+    dataset.file_path = clean_path
+    dataset.file_size = clean_path and Path(clean_path).stat().st_size or dataset.file_size
+    service.update(dataset)
+
+    return PipelineResponse(
+        original_rows=original_rows,
+        resulting_rows=len(result_df),
+        resulting_columns=len(result_df.columns),
+        message=f"Pipeline executed successfully. {original_rows} → {len(result_df)} rows.",
+    )
 
 
 @router.delete("/{dataset_id}", status_code=204)
