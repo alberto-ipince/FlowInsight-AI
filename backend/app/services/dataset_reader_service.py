@@ -8,11 +8,25 @@ class DatasetReaderService:
         extension = Path(file_path).suffix.lower()
 
         if extension == ".csv":
-            return pd.read_csv(file_path)
-        if extension == ".xlsx":
-            return pd.read_excel(file_path)
+            df = pd.read_csv(file_path)
+        elif extension == ".xlsx":
+            df = pd.read_excel(file_path)
+        else:
+            raise ValueError(f"Unsupported file type: {extension}")
 
-        raise ValueError(f"Unsupported file type: {extension}")
+        # Auto-detect date columns
+        for col in df.columns:
+            if df[col].dtype != object:
+                continue
+            try:
+                converted = pd.to_datetime(df[col], errors="coerce")
+                valid_ratio = converted.notna().sum() / max(len(df), 1)
+                if valid_ratio >= 0.8:
+                    df[col] = converted
+            except (ValueError, TypeError):
+                continue
+
+        return df
 
     def profile(self, file_path: str) -> dict:
         df = self.read(file_path)

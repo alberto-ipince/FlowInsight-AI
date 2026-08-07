@@ -107,12 +107,29 @@ function AnalyticsPage() {
         ? 'N/D'
         : null
 
-  // Prepare categorical chart data (first categorical column)
-  const catStats = analytics?.categorical_statistics?.[0]
+  // Smart categorical column selection
+  const catStats = (() => {
+    const stats = analytics?.categorical_statistics
+    if (!stats || stats.length === 0) return null
+    const idPattern = /(^id$|_id$|uuid$)/i
+    const filtered = stats.filter((s) => !idPattern.test(s.column))
+    if (filtered.length === 0) return stats[0]
+    // Prefer fewer categories
+    return filtered.sort((a, b) => a.values.length - b.values.length)[0]
+  })()
   const catChartData = catStats?.values ?? []
 
-  // Prepare numeric summary chart data (first numeric column)
-  const numStat = analytics?.numeric_statistics?.[0]
+  // Smart numeric column selection
+  const numStat = (() => {
+    const stats = analytics?.numeric_statistics
+    if (!stats || stats.length === 0) return null
+    const highPriority = /(salary|price|amount|age|score|quantity|total)/i
+    const idPattern = /(^id$|_id$|uuid$)/i
+    const filtered = stats.filter((s) => !idPattern.test(s.column))
+    const pool = filtered.length > 0 ? filtered : stats
+    const high = pool.find((s) => highPriority.test(s.column))
+    return high ?? pool[0]
+  })()
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">

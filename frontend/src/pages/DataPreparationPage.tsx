@@ -11,35 +11,15 @@ interface DatasetRecord {
   created_at: string
 }
 
-interface ProfileData {
-  total_rows: number
-  total_columns: number
-  column_names: string[]
-  column_types: Record<string, string>
-  missing_values: Record<string, number>
-  duplicated_rows: number
-  memory_usage_bytes: number
-  preview: Record<string, unknown>[]
-}
-
-interface QualityData {
-  total_missing_values: number
-  duplicated_rows: number
-  duplicated_percentage: number
-  columns_with_missing_values: string[]
-  empty_columns: string[]
-  quality_score: number
-}
-
 function DataPreparationPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [dataset, setDataset] = useState<DatasetRecord | null>(null)
-  const [profile, setProfile] = useState<ProfileData | null>(null)
+  const [profile, setProfile] = useState<Record<string, unknown> | null>(null)
   const [loadingProfile, setLoadingProfile] = useState(false)
-  const [quality, setQuality] = useState<QualityData | null>(null)
+  const [quality, setQuality] = useState<Record<string, unknown> | null>(null)
   const [loadingQuality, setLoadingQuality] = useState(false)
 
   // ETL Pipeline state
@@ -68,6 +48,26 @@ function DataPreparationPage() {
     return steps
   }
 
+  const fetchAllData = async (dsId: number) => {
+    setLoadingProfile(true)
+    setLoadingQuality(true)
+    try {
+      const [datasetRes, profileRes, qualityRes] = await Promise.all([
+        apiClient.get<DatasetRecord>(`/datasets/${dsId}`),
+        apiClient.get(`/datasets/${dsId}/profile`),
+        apiClient.get(`/datasets/${dsId}/quality`),
+      ])
+      setDataset(datasetRes.data)
+      setProfile(profileRes.data)
+      setQuality(qualityRes.data)
+    } catch {
+      // ignore
+    } finally {
+      setLoadingProfile(false)
+      setLoadingQuality(false)
+    }
+  }
+
   const handleRunPipeline = async () => {
     if (!dataset) return
 
@@ -75,16 +75,22 @@ function DataPreparationPage() {
     setPipelineResult(null)
 
     try {
-      const response = await apiClient.post(
-        `/datasets/${dataset.id}/pipeline`,
-        { steps: buildSteps() },
-      )
+      const response = await apiClient.post(`/datasets/${dataset.id}/pipeline`, {
+        steps: buildSteps(),
+      })
       setPipelineResult(response.data)
+      // Auto-refresh all data after pipeline
+      await fetchAllData(dataset.id)
     } catch {
       setPipelineResult({ message: 'Error executing pipeline' } as Record<string, unknown>)
     } finally {
       setExecutingPipeline(false)
     }
+  }
+
+  const handleDownload = () => {
+    if (!dataset) return
+    window.open(`${apiClient.defaults.baseURL}/datasets/${dataset.id}/download`, '_blank')
   }
 
   const handleUpload = async () => {
@@ -114,29 +120,20 @@ function DataPreparationPage() {
       setDataset(uploaded)
       setSuccess(`Archivo "${file.name}" subido correctamente.`)
 
-      // Auto-fetch profile
+      // Auto-fetch profile & quality
       setLoadingProfile(true)
-      try {
-        const profileResponse = await apiClient.get<ProfileData>(
-          `/datasets/${uploaded.id}/profile`,
-        )
-        setProfile(profileResponse.data)
-      } catch {
-        setProfile(null)
-      } finally {
-        setLoadingProfile(false)
-      }
-
-      // Auto-fetch quality
       setLoadingQuality(true)
       try {
-        const qualityResponse = await apiClient.get<QualityData>(
-          `/datasets/${uploaded.id}/quality`,
-        )
-        setQuality(qualityResponse.data)
+        const [profileRes, qualityRes] = await Promise.all([
+          apiClient.get(`/datasets/${uploaded.id}/profile`),
+          apiClient.get(`/datasets/${uploaded.id}/quality`),
+        ])
+        setProfile(profileRes.data)
+        setQuality(qualityRes.data)
       } catch {
-        setQuality(null)
+        // ignore
       } finally {
+        setLoadingProfile(false)
         setLoadingQuality(false)
       }
     } catch {
@@ -144,12 +141,6 @@ function DataPreparationPage() {
     } finally {
       setUploading(false)
     }
-  }
-
-  const scoreColor = (score: number) => {
-    if (score >= 90) return 'bg-green-500'
-    if (score >= 70) return 'bg-yellow-500'
-    return 'bg-red-500'
   }
 
   return (
@@ -174,11 +165,9 @@ function DataPreparationPage() {
             {uploading ? 'Subiendo...' : 'Subir Dataset'}
           </button>
 
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 rounded-md p-3">{error}</p>
-          )}
+          {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-600">{error}</p>}
           {success && (
-            <p className="text-sm text-green-700 bg-green-50 rounded-md p-3">{success}</p>
+            <p className="rounded-md bg-green-50 p-3 text-sm text-green-700">{success}</p>
           )}
         </div>
       </section>
@@ -204,7 +193,9 @@ function DataPreparationPage() {
             <span className="font-medium text-gray-800">{dataset.file_size.toLocaleString()} bytes</span>
 
             <span className="text-gray-500">Fecha de carga</span>
-            <span className="font-medium text-gray-800">{new Date(dataset.created_at).toLocaleString()}</span>
+            <span className="font-medium text-gray-800">
+              {new Date(dataset.created_at).toLocaleString()}
+            </span>
           </div>
         ) : (
           <p className="text-sm text-gray-400">No has cargado ningún dataset todavía.</p>
@@ -220,50 +211,70 @@ function DataPreparationPage() {
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               <span className="text-gray-500">Total de filas</span>
-              <span className="font-medium text-gray-800">{profile.total_rows}</span>
+              <span className="font-medium text-gray-800">
+                {String(profile.total_rows ?? '-')}
+              </span>
 
               <span className="text-gray-500">Total de columnas</span>
-              <span className="font-medium text-gray-800">{profile.total_columns}</span>
+              <span className="font-medium text-gray-800">
+                {String(profile.total_columns ?? '-')}
+              </span>
 
               <span className="text-gray-500">Filas duplicadas</span>
-              <span className="font-medium text-gray-800">{profile.duplicated_rows}</span>
+              <span className="font-medium text-gray-800">
+                {String(profile.duplicated_rows ?? '-')}
+              </span>
 
               <span className="text-gray-500">Memoria utilizada</span>
-              <span className="font-medium text-gray-800">{profile.memory_usage_bytes.toLocaleString()} bytes</span>
+              <span className="font-medium text-gray-800">
+                {Number(profile.memory_usage_bytes ?? 0).toLocaleString()} bytes
+              </span>
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-1">Columnas y tipos</h3>
+              <h3 className="mb-1 text-sm font-semibold text-gray-700">Columnas y tipos</h3>
               <div className="flex flex-wrap gap-2">
-                {profile.column_names.map((col: string) => (
-                  <span key={col} className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700">
-                    {col}: {profile.column_types[col]}
+                {(profile.column_names as string[])?.map((col: string) => (
+                  <span
+                    key={col}
+                    className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-700"
+                  >
+                    {col}: {String((profile.column_types as Record<string, string>)?.[col] ?? '')}
                   </span>
                 ))}
               </div>
             </div>
 
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2">Vista previa (primeros 5 registros)</h3>
+              <h3 className="mb-2 text-sm font-semibold text-gray-700">
+                Vista previa (primeros 5 registros)
+              </h3>
               <div className="overflow-x-auto rounded-md border border-gray-200">
                 <table className="min-w-full text-left text-xs">
                   <thead className="bg-gray-50">
                     <tr>
-                      {profile.column_names.map((col: string) => (
-                        <th key={col} className="px-3 py-2 font-medium text-gray-600">{col}</th>
+                      {(profile.column_names as string[])?.map((col: string) => (
+                        <th key={col} className="px-3 py-2 font-medium text-gray-600">
+                          {col}
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {profile.preview.map((row, idx) => (
-                      <tr key={idx} className="even:bg-gray-50/50">
-                        {profile.column_names.map((col: string) => (
-                          <td key={col} className="px-3 py-1.5 text-gray-700">
-                            {String(row[col] ?? '')}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
+                    {(profile.preview as Record<string, unknown>[])?.map(
+                      (row, idx: number) => (
+                        <tr key={idx} className="even:bg-gray-50/50">
+                          {(profile.column_names as string[])?.map((col: string) => (
+                            <td
+                              key={col}
+                              className="whitespace-nowrap px-3 py-1.5 text-gray-700"
+                            >
+                              {String(row[col] ?? '')}
+                            </td>
+                          ))}
+                        </tr>
+                      ),
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -281,38 +292,55 @@ function DataPreparationPage() {
           <p className="text-sm text-blue-600">Evaluando calidad...</p>
         ) : quality ? (
           <div className="space-y-4 text-sm">
-            {/* Quality Score Bar */}
             <div>
-              <div className="flex items-center justify-between mb-1">
+              <div className="mb-1 flex items-center justify-between">
                 <span className="text-gray-500">Quality Score</span>
-                <span className="font-bold text-gray-800">{quality.quality_score}/100</span>
+                <span className="font-bold text-gray-800">
+                  {String(quality.quality_score ?? '-')}/100
+                </span>
               </div>
               <div className="h-3 w-full rounded-full bg-gray-200">
                 <div
-                  className={`h-3 rounded-full transition-all ${scoreColor(quality.quality_score)}`}
-                  style={{ width: `${Math.min(quality.quality_score, 100)}%` }}
+                  className={`h-3 rounded-full transition-all ${
+                    Number(quality.quality_score) >= 90
+                      ? 'bg-green-500'
+                      : Number(quality.quality_score) >= 70
+                        ? 'bg-yellow-500'
+                        : 'bg-red-500'
+                  }`}
+                  style={{
+                    width: `${Math.min(Number(quality.quality_score ?? 0), 100)}%`,
+                  }}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-2">
               <span className="text-gray-500">Total de valores nulos</span>
-              <span className="font-medium text-gray-800">{quality.total_missing_values}</span>
+              <span className="font-medium text-gray-800">
+                {String(quality.total_missing_values ?? '-')}
+              </span>
 
               <span className="text-gray-500">Filas duplicadas</span>
-              <span className="font-medium text-gray-800">{quality.duplicated_rows}</span>
+              <span className="font-medium text-gray-800">
+                {String(quality.duplicated_rows ?? '-')}
+              </span>
 
               <span className="text-gray-500">Porcentaje de duplicados</span>
-              <span className="font-medium text-gray-800">{quality.duplicated_percentage}%</span>
+              <span className="font-medium text-gray-800">
+                {String(quality.duplicated_percentage ?? '-')}%
+              </span>
             </div>
 
-            {/* Columns with missing values */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-1">Columnas con valores nulos</h3>
+              <h3 className="mb-1 text-sm font-semibold text-gray-700">Columnas con valores nulos</h3>
               <div className="flex flex-wrap gap-2">
-                {quality.columns_with_missing_values.length > 0 ? (
-                  quality.columns_with_missing_values.map((col) => (
-                    <span key={col} className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs text-yellow-800">
+                {(quality.columns_with_missing_values as string[])?.length > 0 ? (
+                  (quality.columns_with_missing_values as string[]).map((col: string) => (
+                    <span
+                      key={col}
+                      className="inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs text-yellow-800"
+                    >
                       {col}
                     </span>
                   ))
@@ -322,13 +350,17 @@ function DataPreparationPage() {
               </div>
             </div>
 
-            {/* Empty columns */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-1">Columnas completamente vacías</h3>
+              <h3 className="mb-1 text-sm font-semibold text-gray-700">
+                Columnas completamente vacías
+              </h3>
               <div className="flex flex-wrap gap-2">
-                {quality.empty_columns.length > 0 ? (
-                  quality.empty_columns.map((col) => (
-                    <span key={col} className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs text-red-800">
+                {(quality.empty_columns as string[])?.length > 0 ? (
+                  (quality.empty_columns as string[]).map((col: string) => (
+                    <span
+                      key={col}
+                      className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs text-red-800"
+                    >
                       {col}
                     </span>
                   ))
@@ -343,37 +375,67 @@ function DataPreparationPage() {
         )}
       </section>
 
-      {/* Card 5: Transformaciones ETL */}
+      {/* Card 5: Pipeline ETL */}
       <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-3 text-lg font-semibold text-gray-700">Pipeline ETL</h2>
-        <div className="space-y-3 text-sm">
+        <div className="grid grid-cols-2 gap-2 text-sm">
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={stepRemoveDup} onChange={(e) => setStepRemoveDup(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            <input
+              type="checkbox"
+              checked={stepRemoveDup}
+              onChange={(e) => setStepRemoveDup(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+            />
             Eliminar duplicados
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={stepRemoveNulls} onChange={(e) => setStepRemoveNulls(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            <input
+              type="checkbox"
+              checked={stepRemoveNulls}
+              onChange={(e) => setStepRemoveNulls(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+            />
             Eliminar filas con nulos
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={stepNormalize} onChange={(e) => setStepNormalize(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            <input
+              type="checkbox"
+              checked={stepNormalize}
+              onChange={(e) => setStepNormalize(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+            />
             Normalizar texto
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={stepRename} onChange={(e) => setStepRename(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            <input
+              type="checkbox"
+              checked={stepRename}
+              onChange={(e) => setStepRename(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+            />
             Renombrar columnas
           </label>
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={stepConvert} onChange={(e) => setStepConvert(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+            <input
+              type="checkbox"
+              checked={stepConvert}
+              onChange={(e) => setStepConvert(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+            />
             Convertir tipos
           </label>
           <div>
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={stepFilter} onChange={(e) => setStepFilter(e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600" />
+              <input
+                type="checkbox"
+                checked={stepFilter}
+                onChange={(e) => setStepFilter(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+              />
               Filtrar filas
             </label>
             {stepFilter && (
-              <div className="mt-2 ml-6">
+              <div className="mt-2">
                 <input
                   type="text"
                   value={filterQuery}
@@ -403,16 +465,20 @@ function DataPreparationPage() {
             {executingPipeline ? 'Ejecutando Pipeline...' : 'Ejecutar Pipeline'}
           </button>
           <button
-            disabled
-            className="rounded-md bg-gray-300 px-4 py-2 text-sm font-medium text-gray-500 cursor-not-allowed"
+            onClick={handleDownload}
+            disabled={!dataset}
+            className={`rounded-md px-4 py-2 text-sm font-medium ${
+              dataset
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'cursor-not-allowed bg-gray-300 text-gray-500'
+            }`}
           >
             Descargar Dataset
           </button>
         </div>
 
-        {/* Pipeline Result */}
         {pipelineResult && (
-          <div className="mt-4 rounded-md bg-green-50 p-4 text-sm space-y-1">
+          <div className="mt-4 space-y-1 rounded-md bg-green-50 p-4 text-sm">
             <h3 className="font-semibold text-green-800">Resultado del Pipeline</h3>
             <p className="text-green-700">{String(pipelineResult.message ?? '')}</p>
             <div className="grid grid-cols-2 gap-x-4 text-green-700">

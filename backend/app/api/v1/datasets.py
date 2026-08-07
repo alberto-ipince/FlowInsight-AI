@@ -2,6 +2,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database.session import SessionLocal
@@ -166,6 +167,26 @@ def run_dataset_pipeline(
         resulting_rows=len(result_df),
         resulting_columns=len(result_df.columns),
         message=f"Pipeline executed successfully. {original_rows} → {len(result_df)} rows.",
+    )
+
+
+@router.get("/{dataset_id}/download")
+def download_dataset(
+    dataset_id: int,
+    service: DatasetService = Depends(get_dataset_service),
+) -> FileResponse:
+    dataset = service.get_by_id(dataset_id)
+    if dataset is None:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    file_path = Path(dataset.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        path=str(file_path),
+        filename=dataset.original_filename,
+        media_type="application/octet-stream",
     )
 
 
