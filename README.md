@@ -515,5 +515,5 @@ Para incorporar análisis semántico, generación de insights, recomendaciones d
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/alberto-ipince">Alberto Ipince</a></sub>
+  <sub>Built by <a href="https://github.com/alberto-ipince">Alberto Ipince</a></sub>
 </p>
